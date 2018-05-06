@@ -16,7 +16,7 @@ int main(int argc, char** argv) {
   else { // parse all argument
     // TODO mySQL --nosync -database database.csv
   }
-  Database db(path+file);
+  Database db(path+file)
   cout << "欢迎来到mySQL" << endl << "(mySQL) >>>" << flush;
   string buffer;
   while (getline(cin, buffer)) {
