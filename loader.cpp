@@ -7,8 +7,10 @@
 using namespace std;
 using namespace mySQL;
 
+
+
 int main(int argc, char** argv) {
-  string path("database/"), file("database.csv");
+  string file("database.csv");
   // parse for possible command line options
   if (argc == 1) { // No argument
     // TODO open default file to read config
@@ -16,13 +18,13 @@ int main(int argc, char** argv) {
   else { // parse all argument
     // TODO mySQL --nosync -database database.csv
   }
-  Database db(path+file)
+  Database db(file);
+  auto &p = db.get_parser();
   cout << "欢迎来到mySQL" << endl << "(mySQL) >>>" << flush;
   string buffer;
   while (getline(cin, buffer)) {
-    cout << buffer;
     // TODO
-
+    p.parse(buffer);
     cout << endl << "(mySQL) >>>" << flush;
   }
   return 0;
