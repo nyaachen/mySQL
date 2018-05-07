@@ -40,14 +40,13 @@ public:
     }
     return r;
   }
-  std::string::size_type get_pos() {return pos;}
+  std::string::size_type get_pos() const {return pos;}
+  std::string get_str() const {return s;}
 };
 
 // 单词解析 结束
 
-// 标准错误类型
-class Bad_parse : public std::invalid_argument {};
-class Illigal_dentifier : public std::invalid_argument {};
+
 
 // 前向声明
 class Record;
@@ -94,6 +93,27 @@ static const std::vector<std::string> KEYWORDS {"CREATE", "TABLE", "TO", "FROM",
 
 // 命令解析执行器
 class Parser {
+public:
+  // 错误类型
+  class Exception : public std::invalid_argument {
+  public:
+    Exception(const std::string &s) : std::invalid_argument(s) {}
+  }
+  class Bad_parse : public Exception{
+    public:
+      Bad_parse(const std::string &s) : Exception(s) {}
+  };
+  class Illigal_identifier : public Exception{
+    public:
+      std::string error_info(const Word_parser &p) {
+        std::string err("读取指令时发生错误\n");
+        err += p.get_str() + "\n";
+        err += std::string(p.get_pos(), ' ');
+        err += "*\n不能识别的关键字";
+        return err;
+      }
+      Illigal_identifier(const Word_parser &p) : Exception(error_info(p)) {}
+  };
 private:
   Database &db;
   // 直接负责执行， 执行出错raise
@@ -116,7 +136,9 @@ public:
       //parse_create(s);
       return 0;
     }
-    else return -1;
+    else {
+      throw Illigal_identifier(p);
+    }
   }
 
 };

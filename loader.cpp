@@ -24,8 +24,13 @@ int main(int argc, char** argv) {
   string buffer;
   while (getline(cin, buffer)) {
     // TODO
-    p.parse(buffer);
-    cout << endl << "(mySQL) >>>" << flush;
+    try {
+      p.parse(buffer);
+    }
+    catch (const std::invalid_argument &e) {
+      cerr << e.what() << endl;
+    }
+    cout << "Beta版本并不对数据库执行实际的写操作（但是会正常解析命令）。最终版会完成该功能。" << endl << "(mySQL) >>>" << flush;
   }
   return 0;
 }
