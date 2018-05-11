@@ -112,32 +112,39 @@ using Data = std::string;
 // 单条记录是多个数据的有序排列
 class Record : public std::vector<Data> {
   friend std::ostream &operator<<(std::ostream &os, Record &r);
-private:
-  std::vector<Data> record;
 public:
-  Record(std::vector<Data> l) : record(l) {};
+  Record(std::vector<Data> l) : std::vector<Data>(l) {};
   Record() = default;
+  explicit Record(const std::string  &repr) {
+    std::istringstream is(repr);
+    std::string temp;
+    while (is >> temp) this->push_back(temp);
+  }
 };
 std::ostream &operator<<(std::ostream &os, Record &r){
-
+  for (auto s: r) os << s << "\t";
+  return os;
 }
 
 // 一个表是多条记录的总和
 class Table : public std::vector<Record> {
-  friend class Parser;
   friend std::ostream &operator<<(std::ostream &os, Table &t);
 private:
   Record head; //表头
 public:
   Table() = default;
-  Table(const Record &h, const std::vector<Record> &l) : Table() {};
+  Table(const Record &h, const std::vector<Record> &l) : std::vector<Record>(l), head(h) {}
   explicit Table(std::istream &is) : Table() {
-    is >> head;
+    std::string temp;
+    getline(is, temp);
+    head = Record(temp);
+    while(getline(is, temp)) this->push_back(Record(temp));
   }
 };
 std::ostream &operator<<(std::ostream &os, Table &t){
   os << t.head << std::endl;
-  // TODO
+  for (auto i: t) os << t << std::endl;
+  return os;
 }
 
 
@@ -148,10 +155,6 @@ public:
   Data get_table_name() const {return table_name;}
 };
 
-// 关键字表
-static const std::vector<std::string> KEYWORDS {"CREATE", "TABLE", "TO", "FROM",
-    "DROP", "LIST", "INSERT", "INTO", "VALUES", "DELETE", "WHERE", "UPDATE",
-    "SET", "SELECT", "DISTINCT", "ORDER", "BY", "ASC", "DESC"};
 
 
 
@@ -331,7 +334,7 @@ private:
     }
   }
 
-  // file sync method
+  // io sync from file
   Table read_file(std::string filename) {
     std::ifstream is(filename);
     if (is) ;
@@ -354,7 +357,10 @@ public:
   }
 
   // io同步
-  bool sync();
+  bool sync() {
+    // 写回文件
+    // TODO
+  }
 
   // 命令解析
   bool parse(const std::string &s) {
@@ -382,7 +388,8 @@ public:
     else if (start == "SELECT") {
       parse_select(p);
     }
-    else if (start == "EXIT") {throw std::runtime_error("EXIT");}
+    else if (start == "EXIT") {sync(); throw std::exception();}
+    else if (start == "SYNC") {sync();}
     else throw Bad_parse(error_key(p));
     return true;
   }
