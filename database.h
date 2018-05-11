@@ -1,11 +1,15 @@
-#ifndef PARSER_H
-#define PARSER_H
+#ifndef DATABASE_H
+#define DATABASE_H
 
 #include <string>
 #include <sstream>
 #include <fstream>
 #include <exception>
 #include <vector>
+#include <utility>
+#include <cctype>
+#include <map>
+#include <set>
 
 
 
@@ -24,9 +28,20 @@ private:
   std::string::size_type pos;
 public:
   Word_parser(const std::string &str): s(str), pos(0) {}
+  bool assume(const std::string &keyword) {
+    std::string word = parse();
+    for (auto &w: word) w = std::toupper(w);
+    if (word == keyword) return true;
+    else return false;
+  }
+  std::string get_keyword() {
+    std::string word = parse();
+    for (auto &w: word) w = std::toupper(w);
+    return word;
+  }
   std::string parse(){
     std::string r;
-    while ( (pos < s.size()) and (s[pos] == ' ') ) ++pos;
+    pos = s.find_first_not_of(IGNORE, pos);
     if (pos < s.size()) {
       if (is_sub_str(s.substr(pos,1), SYMBOL)){
         r = s[pos];
@@ -62,27 +77,37 @@ using Data = std::string;
 class Record{
   friend class Table;
   friend class Named_Table;
+  friend std::ostream &operator<<(std::ostream &os, Record &r);
 private:
   std::vector<Data> record;
 public:
   Record(std::vector<Data> l) : record(l) {};
   Record() = default;
 };
+std::ostream &operator<<(std::ostream &os, Record &r){
+
+}
 
 // 一个表是多条记录的总和
 class Table{
   friend class Parser;
+  friend std::ostream &operator<<(std::ostream &os, Table &t);
 private:
   Record head; //表头
   std::vector<Record> sheet;
 public:
   Table() = default;
 };
+std::ostream &operator<<(std::ostream &os, Table &t){
+  os << t.head << std::endl;
+
+}
+
 
 class Named_Table : public Table {
   friend class Parser;
-public:
   Data table_name;
+public:
   Named_Table()=default;
 };
 
@@ -91,44 +116,63 @@ static const std::vector<std::string> KEYWORDS {"CREATE", "TABLE", "TO", "FROM",
     "DROP", "LIST", "INSERT", "INTO", "VALUES", "DELETE", "WHERE", "UPDATE",
     "SET", "SELECT", "DISTINCT", "ORDER", "BY", "ASC", "DESC"};
 
-// 命令解析执行器
-class Parser {
-public:
-  // 错误类型
-  class Exception : public std::invalid_argument {
+
+
+class Bad_parse : public std::invalid_argument {
   public:
-    Exception(const std::string &s) : std::invalid_argument(s) {}
-  }
-  class Bad_parse : public Exception{
-    public:
-      Bad_parse(const std::string &s) : Exception(s) {}
-  };
-  class Illigal_identifier : public Exception{
-    public:
-      std::string error_info(const Word_parser &p) {
-        std::string err("读取指令时发生错误\n");
-        err += p.get_str() + "\n";
-        err += std::string(p.get_pos(), ' ');
-        err += "*\n不能识别的关键字";
-        return err;
-      }
-      Illigal_identifier(const Word_parser &p) : Exception(error_info(p)) {}
-  };
+    Bad_parse(const std::string &p) : std::invalid_argument(p) {}
+};
+
+class Database {
 private:
-  Database &db;
-  // 直接负责执行， 执行出错raise
-  bool parse_create(const std::string &s);
-  bool parse_drop(const std::string &s);
-  bool parse_insert(const std::string &s);
-  bool parse_delete(const std::string &s);
-  bool parse_update(const std::string &s);
-  bool parse_select(const std::string &s);
-  Table Result;
+  // Database
+  std::string database_name;
+  std::vector<std::pair<std::string, std::string>> database_file;
+  std::vector<Named_Table> database_list;
+  // Parser
+  Table parser_result;
+  bool parse_create(Parser &s){
+
+  }
+  bool parse_drop(Parser &s){
+
+  }
+  bool parse_insert(Parser &s){
+
+  }
+  bool parse_delete(Parser &s){
+
+  }
+  bool parse_update(Parser &s){
+
+  }
+  bool parse_select(Parser &s){
+
+  }
+  // 异常处理
+  std::string error_key(const Word_parser &p) {
+    std::string err("读取指令时发生错误\n");
+    err += p.get_str() + "\n";
+    err += std::string(p.get_pos(), ' ');
+    err += "*\n不能识别的关键字";
+    return err;
+  }
+  std::string error_identifier(const Word_parser &p) {
+    std::string err("读取指令时发生错误\n");
+    err += p.get_str() + "\n";
+    err += std::string(p.get_pos(), ' ');
+    err += "*\n非法的值";
+    return err;
+  }
 public:
-  Parser(Database &d): db(d) {}
-  Parser &operator=(const Parser &p) = delete;
-  Parser(const Parser &p) = delete;
-  // 返回执行是否成功，执行出错打印错误报告不raise
+  Database(std::string filename) : database_name(filename){
+    // TODO
+  }
+
+  // io同步
+  bool sync();
+
+  // 命令解析
   bool parse(const std::string &s) {
     auto p = Word_parser(s);
     std::string start = p.parse();
@@ -137,23 +181,11 @@ public:
       return 0;
     }
     else {
-      throw Illigal_identifier(p);
+      throw Bad_parse(error_key(p));
     }
   }
 
-};
 
-class Database {
-  friend class Parser;
-private:
-  std::string database_file;
-  Parser p;
-public:
-  Database(std::string filename) : database_file(filename), p(*this){
-    // Extend feature here
-    // TODO
-  }
-  Parser &get_parser() { return p;}
 };
 
 

@@ -1,1 +1,1 @@
-g++ loader.cpp parser.cpp -o "debug env/mySQL"
+g++ loader.cpp -o "debug env/mySQL"
