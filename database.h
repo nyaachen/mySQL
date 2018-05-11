@@ -11,7 +11,7 @@
 #include <map>
 #include <set>
 
-
+#include <iostream>
 
 namespace mySQL {
 
@@ -44,6 +44,9 @@ public:
     if (word == keyword) return true;
     else throw Bad_parse(error_key(*this));
   }
+  bool assume_end(){
+    return assume("");
+  }
   std::string get_keyword() {
     std::string word = parse();
     for (auto &w: word) w = std::toupper(w);
@@ -65,7 +68,10 @@ public:
     }
     return r;
   }
-  std::string::size_type get_pos() const {return pos;}
+  std::string::size_type get_pos() const {
+    if (pos == std::string::npos) return s.size();
+    return pos;
+  }
   std::string get_str() const {return s;}
 };
 
@@ -83,7 +89,6 @@ std::string error_identifier(const Word_parser &p) {
   err += "*\n非法的值";
   return err;
 }
-
 
 // 单词解析 结束
 
@@ -152,42 +157,103 @@ private:
   std::vector<Named_Table> database_list;
   // Parser
   Table parser_result;
+  std::vector<std::string> parse_csv_pe_v(Word_parser &s, bool allow_dup = false) {
+    std::vector<std::string> attrib_name;
+    std::set<std::string> dup_check;
+    while (true) {
+      std::string attr = s.parse();
+      if (allow_dup or (dup_check.find(attr) == dup_check.end())) {
+        dup_check.insert(attr);
+        attrib_name.push_back(attr);
+      }
+      else throw Bad_parse(error_identifier(s));
+      std::string next = s.get_keyword();
+      if (next == ",") continue;
+      else if (next == ")") break;
+      else throw Bad_parse(error_key(s));
+    }
+    return attrib_name;
+  }
+  std::vector<std::pair<std::string, std::string>> parse_csv_pe_p(Word_parser &s, bool allow_dup = false) {
+    std::vector<std::pair<std::string, std::string>> attrib;
+    std::set<std::string> dup_check;
+    while (true) {
+      std::string attr = s.parse();
+      if (allow_dup or (dup_check.find(attr) == dup_check.end()))  {
+        s.assume("=");
+        std::string value = s.parse();
+        dup_check.insert(attr);
+        attrib.push_back(std::pair<std::string, std::string>(attr, value));
+      }
+      else throw Bad_parse(error_identifier(s));
+      std::string next = s.get_keyword();
+      if (next == ",") continue;
+      else if (next == ")") break;
+      else throw Bad_parse(error_key(s));
+    }
+    return attrib;
+  }
   bool parse_create(Word_parser &s){
     s.assume("TABLE");
     std::string name = s.parse();
-    //
     std::string key= s.get_keyword();
     if( key == "FROM"){
       std::string filename = s.parse();
-      s.assume("");
+      s.assume_end();
       // TODO
     }
     else if (key == "(" ) {
-      std::vector<std::string> attrib_name;
-      std::set<std::string> dup_check;
-      while (true) {
-        std::string attr = s.parse();
-        if (dup_check.find(attr) == dup_check.end()) {
-          dup_check.insert(attr);
-          attrib_name.push_back(attr);
-        }
-        else throw Bad_parse(error_identifier(s));
-        std::string next = s.get_keyword();
-        if (next == ",") continue;
-        else if (next == ")") break;
-        else throw Bad_parse(error_key(s));
-      }
+      std::vector<std::string> attrib_name = parse_csv_pe_v(s);
+      s.assume("TO");
+      std::string filename = s.parse();
+      s.assume_end();
+      //TODO
     }
     else throw Bad_parse(error_key(s));
   }
   bool parse_drop(Word_parser &s){
-
+    s.assume("TABLE");
+    std::string name = s.parse();
+    s.assume_end();
+    // TODO
   }
   bool parse_insert(Word_parser &s){
-
+    s.assume("INTO");
+    std::string name = s.parse();
+    std::string key = s.get_keyword();
+    if (key == "VALUES") {
+      s.assume("(");
+      auto value = parse_csv_pe_v(s, true);
+      s.assume_end();
+      // TODO
+    }
+    else if (key == "(") {
+      auto keys = parse_csv_pe_v(s);
+      s.assume("VALUES");
+      s.assume("(");
+      auto value = parse_csv_pe_v(s,true);
+      s.assume_end();
+      // TODO
+    }
+    else throw Bad_parse(error_key(s));
   }
   bool parse_delete(Word_parser &s){
-
+    std::string key = s.get_keyword();
+    if (key == "*"){
+      s.assume("FROM");
+      std::string name = s.parse();
+      s.assume_end();
+      // TODO
+    }
+    else if (key == "FROM") {
+      std::string name = s.parse();
+      s.assume("WHERE");
+      std::string key = s.parse();
+      s.assume("=");
+      std::string value = s.parse();
+      s.assume_end();
+      // TODO
+    }
   }
   bool parse_update(Word_parser &s){
 
@@ -197,21 +263,40 @@ private:
   }
 
 public:
-  Database();
+  Database() = default;
+
   // io同步
   bool sync();
 
   // 命令解析
   bool parse(const std::string &s) {
     auto p = Word_parser(s);
-    std::string start = p.parse();
+    std::string start = p.get_keyword();
     if (start == "CREATE") {
-      //parse_create(s);
-      return 0;
+      parse_create(p);
     }
-    else {
-      throw Bad_parse(error_key(p));
+    else if (start == "DROP") {
+      parse_drop(p);
     }
+    else if (start == "TABLE") {
+      p.assume("LIST");
+      // TODO
+    }
+    else if (start == "INSERT") {
+      parse_insert(p);
+    }
+    else if (start == "DELETE") {
+      parse_delete(p);
+    }
+    else if (start == "UPDATE") {
+      parse_update(p);
+    }
+    else if (start == "SELECT") {
+      parse_select(p);
+    }
+    else if (start == "EXIT") {throw std::runtime_error("EXIT");}
+    else throw Bad_parse(error_key(p));
+    return true;
   }
 
 

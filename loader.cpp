@@ -11,7 +11,7 @@ using namespace mySQL;
 
 int main(int argc, char** argv) {
   string file("database.csv");
-  Database db();
+  Database db;
   cout << "欢迎来到mySQL" << endl << "(mySQL) >>>" << flush;
   string buffer;
   while (getline(cin, buffer)) {
