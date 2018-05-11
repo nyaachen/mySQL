@@ -32,7 +32,7 @@ public:
     std::string word = parse();
     for (auto &w: word) w = std::toupper(w);
     if (word == keyword) return true;
-    else return false;
+    else raise ;
   }
   std::string get_keyword() {
     std::string word = parse();
@@ -84,9 +84,15 @@ public:
   Record(std::vector<Data> l) : record(l) {};
   Record() = default;
 };
-std::ostream &operator<<(std::ostream &os, Record &r){
+std::ostream &operator<<(std::ostream &os, const Record &r){
+  for (const Data &w: r.record)
+    os << w << "\t" << std::endl;
+  return os;
+}
+std::istream &operator<<(std::istream &is, Record &r){
 
 }
+
 
 // 一个表是多条记录的总和
 class Table{
@@ -132,7 +138,7 @@ private:
   // Parser
   Table parser_result;
   bool parse_create(Parser &s){
-
+    s.assume("TABLE");
   }
   bool parse_drop(Parser &s){
 
@@ -177,7 +183,7 @@ public:
     auto p = Word_parser(s);
     std::string start = p.parse();
     if (start == "CREATE") {
-      //parse_create(s);
+      parse_create(p);
       return 0;
     }
     else {
