@@ -370,7 +370,33 @@ public:
   // io同步
   bool sync() {
     // 写回文件
-    // TODO
+    // 写回数据库
+    std::ofstream os;
+    os.open(database_name, std::iostream::out);
+    if (os){
+      for (auto w: database_file) os << w.first << " " << w.second << std::endl;
+      os.close()
+    }
+    else {
+      throw std::runtime_error("Could not open file: " + database_name);
+    }
+    // 写回各个子数据库
+    for (auto w: database_file){
+      os.open(w.second, std::iostream::out);
+      if (os){
+        for (auto t: database_list) {
+          if (t.get_table_name() == w.first){
+            os << t;
+            break;
+          }
+        }
+        os.close()
+      }
+      else {
+        throw std::runtime_error("Could not open file: " + w.second);
+      }
+    }
+    return true;
   }
 
   // 命令解析
