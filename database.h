@@ -165,6 +165,7 @@ private:
   std::string database_name;
   std::vector<std::pair<std::string, std::string>> database_file;
   std::vector<Named_Table> database_list;
+
   // Parser
   Table parser_result;
   std::vector<std::string> parse_csv_v(Word_parser &s, bool allow_dup = false) {
@@ -209,6 +210,10 @@ private:
       std::string filename = s.parse();
       s.assume_end();
       // TODO
+      Named_Table t(read_file(filename), name);
+      database_list.push_back(t);
+      database_file.push_back(std::pair<std::string, std::string>(name, filename));
+      parser_result = t;
     }
     else if (key == "(" ) {
       std::vector<std::string> attrib_name = parse_csv_v(s);
@@ -217,6 +222,12 @@ private:
       std::string filename = s.parse();
       s.assume_end();
       //TODO
+      Record r(attrib_name);
+      Table t(r, std::vector<Record>());
+      Named_Table nt(t, name);
+      database_list.push_back(nt);
+      database_file.push_back(std::pair<std::string, std::string>(name, filename));
+      parser_result = t;
     }
     else throw Bad_parse(error_key(s));
   }
