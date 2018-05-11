@@ -10,9 +10,9 @@ using namespace mySQL;
 
 
 int main(int argc, char** argv) {
-  string file("database.csv");
-  Database db;
-  cout << "欢迎来到mySQL" << endl << "(mySQL) >>>" << flush;
+  string file = "database.csv";
+  Database db(file);
+  cout << "欢迎来到mySQL 使用sync来同步内存与数据文件" << endl << "(mySQL) >>>" << flush;
   string buffer;
   while (getline(cin, buffer)) {
     // TODO
