@@ -2,6 +2,7 @@
 #include <string>
 #include <fstream>
 #include <sstream>
+#include <exception>
 #include "database.h"
 
 using namespace std;
@@ -17,12 +18,18 @@ int main(int argc, char** argv) {
   while (getline(cin, buffer)) {
     // TODO
     try {
-      db.parse(buffer);
+      if( db.parse(buffer) )
+      	cout << db.parser_result << endl;
     }
     catch (const Bad_parse &e) {
       cerr << e.what() << endl;
     }
-    cout << "Beta版本并不对数据库执行实际的写操作（但是会正常解析命令）。最终版会完成该功能。" << endl << "(mySQL) >>>" << flush;
+    catch (const Program_Exit &e) {break;}
+    catch (const std::exception &e) {
+      cerr << e.what() << endl;
+      throw;
+    }
+    cout << "Preview Version will not perform all select sentence 。最终版会完成该功能。" << endl << "(mySQL) >>>" << flush;
   }
   return 0;
 }

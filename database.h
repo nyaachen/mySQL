@@ -27,6 +27,10 @@ class Bad_parse : public std::invalid_argument {
   public:
     Bad_parse(const std::string &p) : std::invalid_argument(p) {}
 };
+class Program_Exit : public std::runtime_error {
+public:
+  Program_Exit() : std::runtime_error("Program received an exit signal") {}
+};
 
 class Word_parser;
 std::string error_identifier(const Word_parser &p);
@@ -95,7 +99,13 @@ std::string error_identifier(const Word_parser &p) {
   err += "*\n非法的值";
   return err;
 }
-
+std::string error_count(const Word_parser &p) {
+  std::string err("读取指令时发生错误\n");
+  err += p.get_str() + "\n";
+  err += std::string(p.get_pos(), ' ');
+  err += "*\n标识符计数错误";
+  return err;
+}
 // 单词解析 结束
 
 
@@ -140,10 +150,11 @@ public:
     head = Record(temp);
     while(getline(is, temp)) this->push_back(Record(temp));
   }
+  Record get_head() {return head;}
 };
 std::ostream &operator<<(std::ostream &os, Table &t){
   os << t.head << std::endl;
-  for (auto i: t) os << t << std::endl;
+  for (auto i(t.begin()); i != t.end(); ++i) os << (*i) << std::endl;
   return os;
 }
 
@@ -151,7 +162,7 @@ std::ostream &operator<<(std::ostream &os, Table &t){
 class Named_Table : public Table {
   std::string table_name;
 public:
-  Named_Table(const Table t; std::string name) : Table(t), table_name(name) {}
+  Named_Table(const Table t, std::string name) : Table(t), table_name(name) {}
   Data get_table_name() const {return table_name;}
 };
 
@@ -167,7 +178,9 @@ private:
   std::vector<Named_Table> database_list;
 
   // Parser
+  public:
   Table parser_result;
+  private:
   std::vector<std::string> parse_csv_v(Word_parser &s, bool allow_dup = false) {
     std::vector<std::string> attrib_name;
     std::set<std::string> dup_check;
@@ -209,7 +222,7 @@ private:
     if( key == "FROM"){
       std::string filename = s.parse();
       s.assume_end();
-      // TODO
+      // TODO 检查数据库是否已经在表中
       Named_Table t(read_file(filename), name);
       database_list.push_back(t);
       database_file.push_back(std::pair<std::string, std::string>(name, filename));
@@ -221,7 +234,7 @@ private:
       s.assume("TO");
       std::string filename = s.parse();
       s.assume_end();
-      //TODO
+      //TODO 检查文件是否为空
       Record r(attrib_name);
       Table t(r, std::vector<Record>());
       Named_Table nt(t, name);
@@ -235,7 +248,11 @@ private:
     s.assume("TABLE");
     std::string name = s.parse();
     s.assume_end();
-    // TODO
+    // TODO 检查数据库是否存在
+    for(auto i(database_list.begin()); i != database_list.end(); ++i)
+      if (i->get_table_name() == name) {database_list.erase(i); break;}
+    for(auto i(database_file.begin()); i != database_file.end(); ++i)
+      if (i->first == name) {database_file.erase(i); break;}
   }
   bool parse_insert(Word_parser &s){
     s.assume("INTO");
@@ -246,7 +263,9 @@ private:
       auto value = parse_csv_v(s, true);
       s.assume(")");
       s.assume_end();
-      // TODO
+      // TODO检查数据库是否存在
+      for(auto i(database_list.begin()); i != database_list.end(); ++i)
+        if (i->get_table_name() == name) {if ( (i->get_head()).size() != value.size()) throw Bad_parse(error_count(s)); i->push_back(value); parser_result = *i;}
     }
     else if (key == "(") {
       auto keys = parse_csv_v(s);
@@ -254,9 +273,21 @@ private:
       s.assume("VALUES");
       s.assume("(");
       auto value = parse_csv_v(s,true);
+      if(keys.size() != value.size()) throw Bad_parse(error_identifier(s));
       s.assume(")");
       s.assume_end();
-      // TODO
+      // TODO 检查数据库 列名是否存在
+      for(auto i(database_list.begin()); i != database_list.end(); ++i)
+        if (i->get_table_name() == name) {
+          Record head=i->get_head();
+          Record temp(std::vector<Data>(head.size(), "0"));
+          for (int i(0); i != keys.size(); ++i) {
+            for(int j(0); j != head.size(); ++j) if (head[j] == keys[i]) {temp[j] = value[i]; break;}
+          }
+          i->push_back(temp);
+          parser_result = *i;
+          break;
+        }
     }
     else throw Bad_parse(error_key(s));
   }
@@ -266,7 +297,9 @@ private:
       s.assume("FROM");
       std::string name = s.parse();
       s.assume_end();
-      // TODO
+      // TODO 检查表的存在性?
+      for(auto i(database_list.begin()); i != database_list.end(); ++i)
+        if (i->get_table_name() == name) {i->clear(); parser_result = *i; break;}
     }
     else if (key == "FROM") {
       std::string name = s.parse();
@@ -275,7 +308,23 @@ private:
       s.assume("=");
       std::string value = s.parse();
       s.assume_end();
-      // TODO
+      // TODO 检查表和列名的存在性
+      for(auto i(database_list.begin()); i != database_list.end(); ++i)
+        if (i->get_table_name() == name) {
+          auto iter=i->begin();
+          int pos(0);
+          for(; pos != (i->get_head()).size(); ++pos)
+          {
+            if ( (i->get_head())[pos] == key)
+              break;
+          }
+          while (iter != i->end()){
+            if ( (*iter)[pos] == value ) iter = i->erase(iter);
+            else ++iter;
+          }
+          parser_result = *i;
+          break;
+        }
     }
     else throw Bad_parse(error_key(s));
   }
@@ -289,10 +338,44 @@ private:
       s.assume("=");
       std::string value = s.parse();
       s.assume_end();
-      // TODO
+      // TODO 检查表和列名的存在性
+      for(auto i(database_list.begin()); i != database_list.end(); ++i)
+        if (i->get_table_name() == name) {
+          Record head = i->get_head();
+          int pos(0);
+          for(; pos != head.size(); ++pos)
+          {
+            if ( head[pos] == key)
+              break;
+          }
+          for( auto iter=i->begin(); iter != i->end(); ++iter){
+            if ( (*iter)[pos] == value ) {
+              // TODO
+              for (auto p: pairs){
+                for( int j(0); j != head.size(); ++j)
+                  if (head[j] == p.first) {(*iter)[j] = p.second; break;}
+              }
+            }
+          }
+          parser_result = *i;
+          break;
+        }
     }
     else if (key == "") {
-      // TODO
+      // TODO 检查表和列名的存在性
+      for(auto i(database_list.begin()); i != database_list.end(); ++i)
+        if (i->get_table_name() == name) {
+          for(auto iter(i->begin()); iter != i->end(); ++i) {
+            // TODO
+            Record head = i->get_head();
+            for (auto p: pairs){
+              for( int j(0); j != head.size(); ++j)
+                if (head[j] == p.first) {(*iter)[j] = p.second; break;}
+            }
+          }
+        parser_result = *i;
+        break;
+        }
     }
     else throw Bad_parse(error_key(s));
   }
@@ -300,17 +383,28 @@ private:
     auto status = s.peek();
     if (status == "*") {
       s.parse();
+      s.assume("FROM");
+      std::string name = s.parse();
       //TODO
+      for(auto i(database_list.begin()); i != database_list.end(); ++i)
+        if (i->get_table_name() == name) {parser_result = *i; break;}
     }
     else {
       if (status == "DISTINCT") {
         s.parse();
-        // TODO
       }
       auto column =  parse_csv_v(s);
+      s.assume("FROM");
+      std::string name = s.parse();
+      // TODO
+      for(auto i(database_list.begin()); i != database_list.end(); ++i)
+        if (i->get_table_name() == name) {
+          // TODO
+          Record head = i->get_head();
+
+          break;
+        }
     }
-    s.assume("FROM");
-    std::string tablename = s.parse();
     status = s.peek();// to where order_by
     if (status == "TO") {
       s.assume("TO");
@@ -358,12 +452,12 @@ public:
     std::ifstream is(filename);
     if (is) {
       std::string table_name, table_file;
-      while ( is >> table_name >> table_file) database_list.push_back(std::pair<std::string, std::string>(table_name, table_file));
+      while ( is >> table_name >> table_file) database_file.push_back(std::pair<std::string, std::string>(table_name, table_file));
     }
     else throw std::invalid_argument("Could not open database file: " + filename);
 
-    for(auto p: database_list) {
-      database_file.push_back(Named_list(read_file(p.second), p.first));
+    for(auto p: database_file) {
+      database_list.push_back(Named_Table(read_file(p.second), p.first));
     }
   }
 
@@ -375,7 +469,7 @@ public:
     os.open(database_name, std::iostream::out);
     if (os){
       for (auto w: database_file) os << w.first << " " << w.second << std::endl;
-      os.close()
+      os.close();
     }
     else {
       throw std::runtime_error("Could not open file: " + database_name);
@@ -390,7 +484,7 @@ public:
             break;
           }
         }
-        os.close()
+        os.close();
       }
       else {
         throw std::runtime_error("Could not open file: " + w.second);
@@ -405,6 +499,7 @@ public:
     std::string start = p.get_keyword();
     if (start == "CREATE") {
       parse_create(p);
+      return true;
     }
     else if (start == "DROP") {
       parse_drop(p);
@@ -415,20 +510,24 @@ public:
     }
     else if (start == "INSERT") {
       parse_insert(p);
+      return true;
     }
     else if (start == "DELETE") {
       parse_delete(p);
+      return true;
     }
     else if (start == "UPDATE") {
       parse_update(p);
+      return true;
     }
     else if (start == "SELECT") {
       parse_select(p);
+      return true;
     }
-    else if (start == "EXIT") {sync(); throw std::exception();}
+    else if (start == "EXIT") {sync(); throw Program_Exit();}
     else if (start == "SYNC") {sync();}
     else throw Bad_parse(error_key(p));
-    return true;
+    return false;
   }
 
 

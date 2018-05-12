@@ -1,0 +1,2 @@
+stuID	stuName	cID	cName	
+1243	yu	43333	cs_prog	
