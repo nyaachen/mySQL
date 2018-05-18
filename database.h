@@ -10,6 +10,8 @@
 #include <cctype>
 #include <map>
 #include <set>
+#include <algorithm>
+#include <functional>
 
 #include <iostream>
 
@@ -130,6 +132,13 @@ public:
     std::string temp;
     while (is >> temp) this->push_back(temp);
   }
+  bool operator<(const Record &r) {
+    for(int i(0); i != size(); ++i) {
+      if ((*this)[i] == r[i]) continue;
+      else return (*this)[i] < r[i];
+    }
+    return true;
+  }
 };
 std::ostream &operator<<(std::ostream &os, Record &r){
   for (auto s: r) os << s << "\t";
@@ -150,7 +159,7 @@ public:
     head = Record(temp);
     while(getline(is, temp)) this->push_back(Record(temp));
   }
-  Record get_head() {return head;}
+  Record get_head() const {return head;}
 };
 std::ostream &operator<<(std::ostream &os, Table &t){
   os << t.head << std::endl;
@@ -166,7 +175,26 @@ public:
   Data get_table_name() const {return table_name;}
 };
 
-
+Table column_selector(const Table &t, std::vector<std::string> columns, bool distinct=false) {
+  // make a filter function from t
+  std::vector<int> pos;
+  const auto head = t.get_head();
+  for(auto k: columns) {
+    for(int i(0); i != t.size(); ++i)
+      if (head[i] == k) {pos.push_back(i); break;}
+  }
+  auto filt = [pos] (const Record &r) -> Record { Record temp; for(auto p: pos) temp.push_back(r[p]); return temp; };
+  // main dose
+  std::vector<Record> temp;
+  for(auto r: t)
+    temp.push_back(filt(r));
+  if (distinct) {
+    std::sort(temp.begin(), temp.end());
+    auto iter = std::unique(temp.begin(), temp.end());
+    temp.erase(iter, temp.end());
+  }
+  return Table(columns, temp);
+}
 
 
 
@@ -381,17 +409,12 @@ private:
   }
   bool parse_select(Word_parser &s){
     auto status = s.peek();
-    Table (*filter)(const Table &) = nullptr;
-    Table (*back_filter)(const Table &) = nullptr;
+    std::function<Table (const Table &)> filter = nullptr;
+    std::function<Table (const Table &)> back_filter = nullptr;
     Table *target_table = nullptr;
     if (status == "*") {
       s.parse();
       back_filter = [] (const Table &t) -> Table {return t;} ;
-      s.assume("FROM");
-      std::string name = s.parse();
-      //TODO
-      for(auto i(database_list.begin()); i != database_list.end(); ++i)
-        if (i->get_table_name() == name) {target_table = &(*i); break;}
     }
     else {
       bool dist(false);
@@ -400,16 +423,15 @@ private:
         dist = true;
       }
       auto column =  parse_csv_v(s);
-      s.assume("FROM");
-      std::string name = s.parse();
-      //TODO
-      for(auto i(database_list.begin()); i != database_list.end(); ++i)
-        if (i->get_table_name() == name) {
-          target_table = &(*i);
-
-          break;
-        }
+      back_filter = std::bind(column_selector, std::placeholders::_1, column, dist);
     }
+    s.assume("FROM");
+    std::string name = s.parse();
+    //TODO
+    for(auto i(database_list.begin()); i != database_list.end(); ++i)
+      if (i->get_table_name() == name) {target_table = &(*i); break;}
+    // test
+
     // sub orders
     status = s.peek();// to where order_by
     if (status == "TO") {
@@ -417,6 +439,10 @@ private:
       std::string filename = s.parse();
       s.assume_end();
       // TODO
+      parser_result = back_filter(*target_table);
+      std::ofstream os(filename);
+      if (os) {os << parser_result; os.close();}
+      else throw std::runtime_error("Could not open file " + filename);
     }
     else if (status == "WHERE") {
       s.assume("WHERE");
@@ -425,23 +451,50 @@ private:
       std::string value = s.parse();
       s.assume_end();
       // TODO
+      auto head = target_table->get_head();
+      int pos(0);
+      for(;pos != head.size(); ++pos) if (head[pos] == key) break;
+      filter = [pos, head, value] (const Table &t) -> Table {std::vector<Record> temp; for(auto i: t) if(i[pos] == value) temp.push_back(i);return Table(head, temp);};
+      parser_result = back_filter(filter(*target_table));
     }
     else if (status == "ORDER") {
       s.assume("ORDER");
       s.assume("BY");
       auto list = parse_csv_v(s);
+      //
+      std::vector<int> pos;
+      const auto head = target_table->get_head();
+      for(auto k: list) {
+        for(int i(0); i != target_table->size(); ++i)
+          if (head[i] == k) {pos.push_back(i); break;}
+      }
+      //
       status = s.get_keyword();
       if (status == "ASC") {
         // TODO
+        filter = [pos] (const Table &t) -> Table {
+            auto cmp = [pos] (const Record &l, const Record &r) -> bool {for (auto p: pos){if (l[p] == r[p]) continue; else return l[p] < r[p];} return false;};
+            Table temp(t);
+            std::sort(temp.begin(), temp.end(), cmp);
+            return temp;
+        };
       }
       else if (status == "DESC") {
         // TODO
+        filter = [pos] (const Table &t) -> Table {
+            auto cmp = [pos] (const Record &l, const Record &r) -> bool {for (auto p: pos){if (l[p] == r[p]) continue; else return l[p] > r[p];} return false;};
+            Table temp(t);
+            std::sort(temp.begin(), temp.end(), cmp);
+            return temp;
+        };
       }
       else throw Bad_parse(error_key(s));
+      parser_result = filter(back_filter(*target_table));
     }
     else {
       s.assume_end();
       //TODO
+      parser_result = back_filter(*target_table);
     }
   }
 
