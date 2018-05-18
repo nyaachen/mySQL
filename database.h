@@ -381,30 +381,36 @@ private:
   }
   bool parse_select(Word_parser &s){
     auto status = s.peek();
+    Table (*filter)(const Table &) = nullptr;
+    Table (*back_filter)(const Table &) = nullptr;
+    Table *target_table = nullptr;
     if (status == "*") {
       s.parse();
+      back_filter = [] (const Table &t) -> Table {return t;} ;
       s.assume("FROM");
       std::string name = s.parse();
       //TODO
       for(auto i(database_list.begin()); i != database_list.end(); ++i)
-        if (i->get_table_name() == name) {parser_result = *i; break;}
+        if (i->get_table_name() == name) {target_table = &(*i); break;}
     }
     else {
+      bool dist(false);
       if (status == "DISTINCT") {
         s.parse();
+        dist = true;
       }
       auto column =  parse_csv_v(s);
       s.assume("FROM");
       std::string name = s.parse();
-      // TODO
+      //TODO
       for(auto i(database_list.begin()); i != database_list.end(); ++i)
         if (i->get_table_name() == name) {
-          // TODO
-          Record head = i->get_head();
+          target_table = &(*i);
 
           break;
         }
     }
+    // sub orders
     status = s.peek();// to where order_by
     if (status == "TO") {
       s.assume("TO");
@@ -506,7 +512,9 @@ public:
     }
     else if (start == "TABLE") {
       p.assume("LIST");
-      // TODO
+      for (auto p: database_file){
+        std::cout << p.first << std::endl;
+      }
     }
     else if (start == "INSERT") {
       parse_insert(p);
